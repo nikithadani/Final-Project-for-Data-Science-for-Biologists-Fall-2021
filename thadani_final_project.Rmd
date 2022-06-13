@@ -1,0 +1,309 @@
+---
+title: "Final Project"
+subtitle: "Data Science for Biologists, Fall 2021"
+author: "Nikita Thadani"
+output: 
+   prettydoc::html_pretty:
+    theme: hpstr
+    highlight: pygments
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+# DON'T CHANGE THE NEXT LINE, except to add NEW options if you have any, like default figure sizes
+knitr::opts_chunk$set(warning=FALSE, message=FALSE, echo = TRUE, include = TRUE)
+
+# Path to figure export directory 
+path_to_figures <- file.path(here::here(), "figures")
+
+# Load all libraries you use HERE. If you have to install something, please make sure to discuss with Spielman.
+library(tidyverse)
+library(pROC)
+theme_set(theme_classic())
+```
+
+<br><br>
+
+## Introduction
+
+I obtained the Breast Cancer cell data from the Kaggle website [here](https://www.kaggle.com/uciml/breast-cancer-wisconsin-data), which also directs you to the UCI Machine Learning Repository [here](https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Diagnostic%29). The dataset contains 569 samples (357 benign and 212 malignant) of different features of breast tumor cell nuclei by using the biopsy method of fine needle aspirate (FNA) of a breasts mass. I picked this data set mainly because I actually wanted to learn what measurements are taken into consideration when doing biopsy on breast mass, I had no idea what exactly helps determine whether it is a malignant or benign breast tumor. Quite honestly by doing the model to predict future diagnosis, makes me feel successful in a way, even though my model is not being used for such important diagnosis, I feel like I can *actually* do models to keep pushing for better healthcare systems. 
+
+The attributes in the data set are as follows:
+
++ id: Identifies the sample
++ diagnosis: Tumor is 1= Malignant or 0= Benign
++ radius: Mean of distances from center to points on the perimeter 
++ texture:  Standard deviation of gray-scale values 
++ perimeter: Distance around nuclear border  
++ area : Area of nucleus 
++ smoothness: Variation in the cell’s radial lengths  
++ compactness: perimeter$^2$ / area)
++ concavity: Size of indentations in the nuclear border
++ concave points: Number of concave portions of the nuclear border
++ symmetry: Deviation of nuclei shape from ideal 
++ fractal dimension: Measurement of nuclear border irregularity or "coastline approximation"
++ The mean(`variable_mean`), standard error(`variable_se`) and "worst" or largest (mean of the three
+largest values, shown as `variable_se`) of these features were computed for each image,
+resulting in 30 features. All feature values are recorded with four significant digits
+
+Since the attributes have been explained above, the `variables` in the dataset are as follow:
+
++ `id`
++ `diagnosis`
++ `radius_mean`
++ `texture_mean`
++ `perimeter_mean` 
++ `area_mean`
++ `smoothness_mean`
++ `compactness_mean`
++ `concavity_mean`
++ `concave points_mean`         
++ `symmetry_mean `
++ `fractal_dimension_mean`
++ `radius_se`
++ `texture_se` 
++ `perimeter_se` 
++ `area_se`
++ `smoothness_se`
++ `compactness_se`
++ `concavity_se`
++ `concave points_se`
++ `symmetry_se`
++ `fractal_dimension_se`
++ `radius_worst` 
++ `texture_worst `
++ `perimeter_worst `
++ `area_worst`
++ `smoothness_worst` 
++ `compactness_worst` 
++ `concavity_worst `
++ `concave points_worst`
++ `symmetry_worst`
++ `fractal_dimension_worst`
++ `...33 `: This variable is full of NAs, it will be later deleted
+
+
+
+
+```{r read-examine-data}
+# Code to read in the data:
+breast_cancer <-read_csv("/cloud/project/project_proposal/thadani_dataset.csv") 
+
+# Code to dplyr::glimpse() the data:
+glimpse(breast_cancer)
+
+
+#clean data
+
+breast_cancer %>%
+  select(-id) %>% 
+  select(- ...33) %>%
+  mutate(diagnosis  = if_else(diagnosis  == "M", 1, 0))  -> new_can
+new_can
+
+
+#data with full name of diagnosis
+
+new_can %>% 
+  
+mutate(diagnosis  = if_else(diagnosis == 1, 
+                            "Malignant", 
+                            "Benign")) -> diagnosis_breast
+diagnosis_breast
+
+
+```
+
+<br><br>
+
+## Question 1: Modeling
+
+#### Do these specific variables explain variation in/predict status of response?
+
+### Methods
+
+```{r model}
+model_selection <- glm(diagnosis ~ radius_mean 
+                       + texture_mean 
+                       + perimeter_mean 
+                       + area_mean 
+                       + smoothness_mean 
+                       + compactness_mean 
+                       + concavity_mean 
+                       + symmetry_mean 
+                       + fractal_dimension_mean,
+                       data = new_can,
+                       family = "binomial")
+
+model_formula <- as.formula(model_selection)
+model_formula
+
+
+model_roc <- roc(new_can$diagnosis,
+                 model_selection$fitted.values)  #MODEL!
+model_roc$auc  #extract auc    #0.9866
+
+
+#Logic curve 
+
+tibble(logistic_x = model_selection$linear.predictors, 
+       logistic_y = model_selection$fitted.values, 
+       truth = if_else(new_can$diagnosis == 1, "Malignant", "Benign")) -> logistic_model_plot_data
+
+
+ggplot(logistic_model_plot_data) + 
+  aes(x = logistic_x,
+      y = logistic_y) + 
+  geom_line() + 
+  geom_point(aes(color = truth), alpha = 0.4) +
+  scale_color_viridis_d(option = 'plasma') + 
+  labs(x = "Linear predictors", 
+       y = "Predicted probability of breast cancer", 
+       color = "True disease status",
+       title = "Logistic Curve") -> modelfig
+modelfig
+
+output_figure_file <- file.path(path_to_figures, 
+                                "question1.png")
+
+ggsave(output_figure_file, # output file name to save a PNG file
+       modelfig,             
+       width = 6,          
+       height = 4)
+```
+
+
+### Answer
+
+The model has an AUC of 0.9866 which indicates a strong model since it has a high AUC.
+ 
+
+
+<br><br>
+
+## Question 2
+
+#### Are malignant cells more concave and have a bigger radius than benign ones?.
+
+### Methods
+
+```{r q2}
+
+diagnosis_breast %>%
+  ggplot() +
+  aes(x= radius_mean,
+      y= concavity_mean,
+      color = diagnosis)+
+  geom_point() +
+  labs(x= "Radius",
+       y = "Concavity",
+       color = "Diagnosis",
+       title = "Are malignant cells more concave and have a bigger radius than benign ones?")+
+  geom_smooth(method = "lm",
+              color = "red") +
+  scale_color_viridis_d(option = 'cividis') -> q2 
+q2
+
+
+output_figure_file <- file.path(path_to_figures, 
+                                "question2.png")
+
+ggsave(output_figure_file, # output file name to save a PNG file
+       q2,             
+       width = 8,          
+       height = 4)
+```
+
+
+
+### Answer
+
+The plot shows that malignant cells are more concave and have a bigger radius than benign ones because there is a positive linear relationship between the variables. 
+
+<br><br>
+
+## Question 3
+
+#### What is the relationship between the area and compactness of the cell nuclei? 
+
+### Methods
+
+```{r q3}
+diagnosis_breast %>%
+  ggplot() +
+  aes(x= area_mean,
+      y= compactness_mean,
+      color = diagnosis)+
+  geom_point() +
+  labs(x= "Area",
+       y= "Compactness",
+       color = "Diagnosis",
+       title = "What is the relationship between the area and compactness of the cell nuclei?")+
+  geom_smooth(method = "lm",
+              color = "yellow") +
+  scale_color_brewer(palette = 'Set1')-> q3
+q3
+
+
+output_figure_file <- file.path(path_to_figures, 
+                                "question3.png")
+
+ggsave(output_figure_file, # output file name to save a PNG file
+       q3,             
+       width = 8,          
+       height = 4)
+```
+ 
+
+
+### Answer
+
+The plot shows a positive linear relationship between the area and compactness of the cell nuclei.  
+
+
+<br><br>
+
+## Question 4
+
+#### How many malignancies are in the dataset?
+
+### Methods
+
+```{r q4}
+hsize <- 5
+
+diagnosis_breast %>%
+  count(diagnosis) %>%
+  mutate(hsize) %>%
+  ggplot()+
+  aes(x = hsize, 
+      y= n,
+      fill= diagnosis) +
+  geom_col() +
+  geom_text(aes(label = n),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE) +
+  coord_polar(theta = "y") +
+  xlim(c(0.2, hsize + 0.5))+
+  labs(title ="How many malignancies are in the dataset?",
+       fill= "Diagnosis") +
+  scale_fill_brewer(palette = 'Set3') +
+  theme_void() -> q4
+q4
+
+output_figure_file <- file.path(path_to_figures, 
+                                "question4.png")
+
+ggsave(output_figure_file, # output file name to save a PNG file
+       q4,             
+       width = 6,          
+       height = 4)
+
+```
+
+
+
+### Answer
+
+There are 356 malignancies in this data set. 
