@@ -88,7 +88,7 @@ Since the attributes have been explained above, the `variables` in the dataset a
 
 ```{r read-examine-data}
 # Code to read in the data:
-breast_cancer <-read_csv("/cloud/project/project_proposal/thadani_dataset.csv") 
+breast_cancer <-read_csv("/Users/ni_k_/Documents/projects/Final-Project-for-Data-Science-for-Biologists-Fall-2021/thadani_dataset.csv") 
 
 # Code to dplyr::glimpse() the data:
 glimpse(breast_cancer)
